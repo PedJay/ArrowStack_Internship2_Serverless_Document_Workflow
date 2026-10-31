@@ -14,9 +14,8 @@ and every outcome is emailed through SNS. All of it is defined in one CloudForma
 | **Solution** | Upload → automatic check, classification, invoice number/total extraction, duplicate detection, filing and notification within seconds |
 | **Stack** | Python 3.12 · AWS Lambda (arm64) · API Gateway HTTP API · S3 (presigned POST, versioning) · SQS + DLQ · DynamoDB (on-demand, PITR) · SNS · Secrets Manager · CloudWatch (EMF metrics, alarms, dashboard) · AWS Budgets · CloudFormation |
 
-> **Status (2026-10-31):** code, infrastructure template, tests and docs are complete and verified locally
-> (84 tests, 94% coverage, local demo 14/14, cfn-lint clean). **The AWS deployment is on hold.** Follow
-> [RUN-GUIDE.md](RUN-GUIDE.md) to deploy and capture the cloud evidence.
+> **Status (2026-10-31):** deployed to AWS (ap-south-1). **Cloud smoke test 26/26 PASS**, end-to-end p50 **1.2 s**.
+> 84 tests, 94% coverage, local demo 14/14, cfn-lint clean. See [docs/test-evidence.md](docs/test-evidence.md).
 
 ## Architecture
 

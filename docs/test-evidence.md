@@ -40,14 +40,23 @@ truncated PDF → REJECTED, Latin-1 text → REJECTED, same invoice again → DU
 |---|---|---|---|
 | 1 | processor integration tests | moto sends S3 `eventTime` without a timezone. The latency metric raised `TypeError` **after** the document was filed, so the message was retried | Naive timestamps are treated as UTC. Metrics errors are now caught and logged and can never fail a message |
 | 2 | local demo | Latin-1 text was refused as "application/octet-stream", which doesn't tell the uploader what to do | NUL-free content counts as text, and strict UTF-8 decoding then gives the specific reason (D18) |
+| 4 | cloud smoke test (latency) | End-to-end p50 was 21.8 s although processing took < 1 s: the 2 s SQS batching window made the poller hold messages ~20 s at low volume | Batching window set to 0 (D21). p50 now 1.2 s |
 | 3 | code review | `MAX_UPLOAD_BYTES` was built by string concatenation in CloudFormation (`10` → `10048576`) | Parameter is now in bytes (D16) |
 
-## 4. Cloud validation — ON HOLD (run with RUN-GUIDE.md)
+## 4. Cloud validation (2026-10-31, stack `docflow`, ap-south-1)
+
+**Smoke test: 26 / 26 PASS** (`evidence/smoke-20261031T151522Z.json`, before D21, and `evidence/smoke-20261031T151908Z.json`, after D21).
+
+| Metric | Before (batching window 2 s) | After (window 0) | Target N4 |
+|---|---|---|---|
+| End-to-end p50 (client-observed) | 21.8 s | **1.2 s** | < 30 s ✅ |
+| End-to-end max | 22.3 s | **2.3 s** | |
+| Processing per document (EMF) | 93–610 ms | same | p95 < 2 s ✅ |
 
 | # | Evidence to capture | Result / file |
 |---|---|---|
 | C1 | `deploy.ps1` output table (stack outputs) | screenshot |
-| C2 | `smoke_test.py`: **all checks PASS**, incl. S3 refusing wrong size/type and public GET | `evidence/smoke-<timestamp>.json` + screenshot |
+| C2 | `smoke_test.py`: **all checks PASS**, incl. S3 refusing wrong size/type and public GET | ✅ 26/26, `evidence/smoke-20261031T151908Z.json` + screenshot |
 | C3 | `upload.py` of `samples\INV-2026-0042.pdf` showing extracted invoice number and total | screenshot |
 | C4 | AP email for PROCESSED + REJECTED, and an alarm email | screenshots |
 | C5 | CloudWatch dashboard after C2 (outcomes, latency p50/p95, queue) | screenshot |
@@ -58,4 +67,4 @@ truncated PDF → REJECTED, Latin-1 text → REJECTED, same invoice again → DU
 | C10 | Restore drill (runbook): S3 version restore + DynamoDB PITR restore. **Measured RTO = ___ min** | runbook + screenshots |
 | C11 | DynamoDB items: a PROCESSED, a REJECTED and a DUPLICATE record, plus a `SHA256#` claim item | screenshot |
 | C12 | Budget visible in Billing → Budgets | screenshot |
-| C13 | Measured end-to-end latency p50 / max from the smoke report vs the N4 target (< 30 s) | `observed_latency_ms` in C2 |
+| C13 | Measured end-to-end latency p50 / max from the smoke report vs the N4 target (< 30 s) | ✅ p50 1.2 s / max 2.3 s (table above) |

@@ -387,7 +387,8 @@ Resources:
       FunctionName: !Ref ProcessorFunction
       EventSourceArn: !GetAtt IntakeQueue.Arn
       BatchSize: 5
-      MaximumBatchingWindowInSeconds: 2
+      # 0 = invoke as soon as a message arrives. With 2 s, the first cloud run measured ~21 s queue wait per document (D21)
+      MaximumBatchingWindowInSeconds: 0
       FunctionResponseTypes: [ReportBatchItemFailures] # retry only the failed messages
       ScalingConfig:
         MaximumConcurrency: 2 # cost/throughput guard; the queue absorbs bursts

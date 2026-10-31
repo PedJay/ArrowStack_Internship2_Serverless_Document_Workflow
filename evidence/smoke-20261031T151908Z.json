@@ -1,0 +1,203 @@
+{
+  "kind": "cloud smoke test",
+  "base_url": "https://51v0iyf6ma.execute-api.ap-south-1.amazonaws.com",
+  "run_at": "2026-10-31T15:19:08+00:00",
+  "passed": 26,
+  "total": 26,
+  "observed_latency_ms": {
+    "note": "client-observed: S3 upload finished -> status final via API polling (1 s poll interval)",
+    "p50": 1233,
+    "max": 2268
+  },
+  "checks": [
+    {
+      "check": "GET /health -> 200 (no key needed)",
+      "result": "PASS",
+      "detail": 200,
+      "ms": null
+    },
+    {
+      "check": "POST /uploads without key -> 401",
+      "result": "PASS",
+      "detail": 401,
+      "ms": null
+    },
+    {
+      "check": "invalid upload request -> 422",
+      "result": "PASS",
+      "detail": "{\"detail\": [{\"field\": \"content_type\", \"error\": \"must be one of ['application/pdf', 'image/jpeg', 'image/png', 'text/csv', 'text/plain']\"}, {\"field\": \"size_bytes\", \"error\": \"empty files are not accepte",
+      "ms": null
+    },
+    {
+      "check": "malformed JSON -> 400",
+      "result": "PASS",
+      "detail": 400,
+      "ms": null
+    },
+    {
+      "check": "S3 refuses a body larger than declared",
+      "result": "PASS",
+      "detail": "400 <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>EntityTooLarge</Code><Message>Your proposed upload exceeds the maxim",
+      "ms": null
+    },
+    {
+      "check": "S3 refuses a different Content-Type",
+      "result": "PASS",
+      "detail": "403 <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Invalid according to Policy: Policy Cond",
+      "ms": null
+    },
+    {
+      "check": "anonymous GET on the bucket -> 403 (public access blocked)",
+      "result": "PASS",
+      "detail": 403,
+      "ms": null
+    },
+    {
+      "check": "upload 'invoice PDF -> fields extracted' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "invoice PDF -> fields extracted -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "invoice",
+        "extracted": {
+          "currency": "INR",
+          "invoice_number": "INV-2026-0042",
+          "total_amount_minor": 1245050
+        }
+      },
+      "ms": 1185
+    },
+    {
+      "check": "upload 'delivery note (text)' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "delivery note (text) -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "delivery_note"
+      },
+      "ms": 1367
+    },
+    {
+      "check": "upload 'stock count (CSV, 1 ragged row)' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "stock count (CSV, 1 ragged row) -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "stock_report"
+      },
+      "ms": 1267
+    },
+    {
+      "check": "upload 'shelf photo (PNG)' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "shelf photo (PNG) -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "other"
+      },
+      "ms": 2268
+    },
+    {
+      "check": "upload 'executable renamed to .pdf' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "executable renamed to .pdf -> REJECTED",
+      "result": "PASS",
+      "detail": {
+        "status": "REJECTED",
+        "reason": "content is application/x-msdownload (Windows executable) but was declared as application/pdf"
+      },
+      "ms": 1200
+    },
+    {
+      "check": "upload 'truncated PDF' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "truncated PDF -> REJECTED",
+      "result": "PASS",
+      "detail": {
+        "status": "REJECTED",
+        "reason": "PDF is truncated or damaged (no %%EOF marker)"
+      },
+      "ms": 1182
+    },
+    {
+      "check": "upload 'non-UTF-8 text' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "non-UTF-8 text -> REJECTED",
+      "result": "PASS",
+      "detail": {
+        "status": "REJECTED",
+        "reason": "text is not valid UTF-8 (byte 3). Re-save the file as UTF-8"
+      },
+      "ms": 1275
+    },
+    {
+      "check": "upload 'same invoice uploaded again' to S3 -> 204",
+      "result": "PASS",
+      "detail": "204 ",
+      "ms": null
+    },
+    {
+      "check": "same invoice uploaded again -> DUPLICATE",
+      "result": "PASS",
+      "detail": {
+        "status": "DUPLICATE",
+        "reason": "same content as document 95926dbe-7688-44ab-acc7-13edab19c29b"
+      },
+      "ms": 1174
+    },
+    {
+      "check": "presigned download returns the exact bytes (SHA-256)",
+      "result": "PASS",
+      "detail": 200,
+      "ms": null
+    },
+    {
+      "check": "invoice number + total extracted",
+      "result": "PASS",
+      "detail": {
+        "currency": "INR",
+        "invoice_number": "INV-2026-0042",
+        "total_amount_minor": 1245050
+      },
+      "ms": null
+    },
+    {
+      "check": "GET /documents?status=PROCESSED includes the invoice",
+      "result": "PASS",
+      "detail": null,
+      "ms": null
+    }
+  ]
+}

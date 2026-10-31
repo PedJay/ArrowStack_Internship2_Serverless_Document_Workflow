@@ -10,7 +10,7 @@ flowchart LR
     AF -->|GetSecretValue| SM[Secrets Manager<br/>API key]
     C -->|2 presigned POST<br/>exact key/type/size| S3[(S3 docs bucket<br/>versioned, private, TLS-only)]
     S3 -->|3 ObjectCreated<br/>prefix incoming/| Q[SQS intake queue]
-    Q -->|batch 5, max 2 concurrent| PF[Lambda: processor<br/>sniff, inspect, dedupe,<br/>classify, file]
+    Q -->|batch 5, no batching window, max 2 concurrent| PF[Lambda: processor<br/>sniff, inspect, dedupe,<br/>classify, file]
     Q -.->|after 3 failed receives| DLQ[SQS DLQ<br/>14 days]
     PF -->|copy| P[processed/]
     PF -->|copy| QZ[quarantine/]
