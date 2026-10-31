@@ -1,0 +1,111 @@
+# pytest -v --cov=docflow  (2026-10-31T08:50Z)
+============================= test session starts =============================
+platform win32 -- Python 3.13.2, pytest-8.3.4, pluggy-1.7.0 -- E:\ArrowStack Internship\project2-serverless-document-workflow\.venv\Scripts\python.exe
+rootdir: E:\ArrowStack Internship\project2-serverless-document-workflow
+configfile: pytest.ini
+testpaths: tests
+plugins: cov-6.0.0
+collecting ... collected 84 items
+
+tests/test_api.py::test_health_needs_no_key PASSED                       [  1%]
+tests/test_api.py::test_protected_routes_need_the_key PASSED             [  2%]
+tests/test_api.py::test_api_key_comes_from_secrets_manager PASSED        [  3%]
+tests/test_api.py::test_create_upload_registers_document_and_returns_presigned_post PASSED [  4%]
+tests/test_api.py::test_upload_validation_errors_are_422_with_details PASSED [  5%]
+tests/test_api.py::test_malformed_json_is_400 PASSED                     [  7%]
+tests/test_api.py::test_base64_body_is_decoded PASSED                    [  8%]
+tests/test_api.py::test_unknown_route_and_wrong_method PASSED            [  9%]
+tests/test_api.py::test_unknown_document_is_404 PASSED                   [ 10%]
+tests/test_api.py::test_list_documents_by_status_with_pagination PASSED  [ 11%]
+tests/test_api.py::test_list_documents_rejects_bad_parameters PASSED     [ 13%]
+tests/test_api.py::test_internal_errors_are_hidden PASSED                [ 14%]
+tests/test_inspector.py::test_sniff_type[%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Producer (DocFlow sample generator) >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Length 42 >>\nstream\nBT /F1 12 Tf 72 720 Td 16 TL (hi) Tj T* ET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000015 00000 n \n0000000064 00000 n \n0000000121 00000 n \n0000000179 00000 n \n0000000305 00000 n \n0000000375 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R /Info 3 0 R >>\nstartxref\n467\n%%EOF\n-application/pdf] PASSED [ 15%]
+tests/test_inspector.py::test_sniff_type[\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x04\x00\x00\x00\x03\x08\x02\x00\x00\x00;\x969\x91\x00\x00\x00\x10IDATx\x9cc\xd0\xab5\x82#\x06\x9c\x1c\x00\xc9\xf9\n]}\xab\x13\x9d\x00\x00\x00\x00IEND\xaeB`\x82-image/png] PASSED [ 16%]
+tests/test_inspector.py::test_sniff_type[\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xc0\x00\x11\x08\x01\xe0\x02\x80\x03\x01"\x00\x02\x11\x01\x03\x11\x01\xff\xd9-image/jpeg] PASSED [ 17%]
+tests/test_inspector.py::test_sniff_type[hello, world\n-text/plain] PASSED [ 19%]
+tests/test_inspector.py::test_sniff_type[\xe0\xa4\xa8\xe0\xa4\xae\xe0\xa4\xb8\xe0\xa5\x8d\xe0\xa4\xa4\xe0\xa5\x87 \xe2\x82\xb9 500\n-text/plain] PASSED [ 20%]
+tests/test_inspector.py::test_sniff_type[MZ\x90\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00-application/x-msdownload (Windows executable)] PASSED [ 21%]
+tests/test_inspector.py::test_sniff_type[PK\x03\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00-application/zip (archive or Office document)] PASSED [ 22%]
+tests/test_inspector.py::test_sniff_type[\x7fELF\x02\x01-application/x-elf (Linux executable)] PASSED [ 23%]
+tests/test_inspector.py::test_sniff_type[#!/bin/sh\nrm -rf /\n-text/x-script (shell script)] PASSED [ 25%]
+tests/test_inspector.py::test_sniff_type[\x00\x01\x02binary-application/octet-stream] PASSED [ 26%]
+tests/test_inspector.py::test_non_utf8_text_is_still_text_so_the_encoding_error_is_specific PASSED [ 27%]
+tests/test_inspector.py::test_type_matches_allows_csv_as_text_only PASSED [ 28%]
+tests/test_inspector.py::test_pdf_metadata_and_text PASSED               [ 29%]
+tests/test_inspector.py::test_bad_pdfs_rejected[%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Producer (DocFlow sample generator) >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Length 41 >>\nstream\nBT /F1 12 Tf 72 720 Td 16 TL (x) Tj T* ET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000015 00000 n \n0000000064 00000 n \n0000000121 00000 n \n0000000179 00000 n \n0000000305 00000 n \n0000000375 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R /Info-truncated] PASSED [ 30%]
+tests/test_inspector.py::test_bad_pdfs_rejected[%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Encrypt  (DocFlow sample generator) >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Length 41 >>\nstream\nBT /F1 12 Tf 72 720 Td 16 TL (x) Tj T* ET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000015 00000 n \n0000000064 00000 n \n0000000121 00000 n \n0000000179 00000 n \n0000000305 00000 n \n0000000375 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R /Info 3 0 R >>\nstartxref\n466\n%%EOF\n-password-protected] PASSED [ 32%]
+tests/test_inspector.py::test_bad_pdfs_rejected[%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF-no pages] PASSED [ 33%]
+tests/test_inspector.py::test_png_metadata_and_damage PASSED             [ 34%]
+tests/test_inspector.py::test_jpeg_metadata_and_damage PASSED            [ 35%]
+tests/test_inspector.py::test_text_and_csv_metadata PASSED               [ 36%]
+tests/test_inspector.py::test_bad_text_rejected[caf\xe9 latin-1-text/plain-not valid UTF-8] PASSED [ 38%]
+tests/test_inspector.py::test_bad_text_rejected[   \n\t  -text/plain-only whitespace] PASSED [ 39%]
+tests/test_inspector.py::test_bad_text_rejected[just_one_column\nvalue\n-text/csv-at least 2 columns] PASSED [ 40%]
+tests/test_inspector.py::test_bad_text_rejected[anything-application/zip-unsupported] PASSED [ 41%]
+tests/test_inspector.py::test_classify[scan_0001.pdf-TAX INVOICE ...-invoice] PASSED [ 42%]
+tests/test_inspector.py::test_classify[INV-2026-0042.pdf--invoice] PASSED [ 44%]
+tests/test_inspector.py::test_classify[note.txt-Delivery Note DN-1-delivery_note] PASSED [ 45%]
+tests/test_inspector.py::test_classify[PO-55.pdf--purchase_order] PASSED [ 46%]
+tests/test_inspector.py::test_classify[stock_count_oct.csv-sku,qty-stock_report] PASSED [ 47%]
+tests/test_inspector.py::test_classify[holiday_photo.png--other] PASSED  [ 48%]
+tests/test_inspector.py::test_extract_invoice_fields_uses_grand_total_in_paise PASSED [ 50%]
+tests/test_processor.py::test_invoice_pdf_is_processed_classified_and_filed PASSED [ 51%]
+tests/test_processor.py::test_other_supported_types[delivery_DN-7781.txt-DELIVERY NOTE DN-7781\nSupplier: Konkan Cotton Mills (fictional)\nDelivered to: BrightMart Store 3, Panaji\nDate: 2026-10-29\n\nSKU            QTY\nTSHIRT-BLK-M   40\nCAP-RED        10\n\nReceived by: store desk (simulated)\n-text/plain-delivery_note-meta_check0] PASSED [ 52%]
+tests/test_processor.py::test_other_supported_types[stock_count_oct.csv-sku,name,counted_qty,location\nTSHIRT-BLK-M,Black T-Shirt (M),37,A1\nCAP-RED,Red Cap,10,B4\nMUG-WHT,White Mug,0,C2\nSOCKS-GRY,Grey Socks,12\n-text/csv-stock_report-meta_check1] PASSED [ 53%]
+tests/test_processor.py::test_other_supported_types[shelf_photo.png-\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x08\x00\x00\x00\x06\x08\x02\x00\x00\x00qgH\xac\x00\x00\x00\x11IDATx\x9cc\xd0\xab5\xc2\x8a\x18\x06R\x02\x00$Z)ql\xac5`\x00\x00\x00\x00IEND\xaeB`\x82-image/png-other-meta_check2] PASSED [ 54%]
+tests/test_processor.py::test_other_supported_types[receipt.jpg-\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xc0\x00\x11\x08\x03\x00\x04\x00\x03\x01"\x00\x02\x11\x01\x03\x11\x01\xff\xd9-image/jpeg-other-meta_check3] PASSED [ 55%]
+tests/test_processor.py::test_bad_content_is_quarantined_with_reason[invoice_fake.pdf-MZ\x90\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00-application/pdf-Windows executable] PASSED [ 57%]
+tests/test_processor.py::test_bad_content_is_quarantined_with_reason[photo.png-%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Producer (DocFlow sample generator) >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Length 322 >>\nstream\nBT /F1 12 Tf 72 720 Td 16 TL (BrightMart Supplies Pvt Ltd \(simulated\)) Tj T* (TAX INVOICE) Tj T* (Invoice No: INV-2026-0042) Tj T* (Supplier: Konkan Cotton Mills \(fictional\)) Tj T* (Line 1: 40 x Black T-Shirt \(M\) @ 249.00 = 9,960.00) Tj T* (Line 2: 10 x Cap @ 249.05 = 2,490.50) Tj T* (Total: INR 12,450.50) Tj T* ET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000015 00000 n \n0000000064 00000 n \n0000000121 00000 n \n0000000179 00000 n \n0000000305 00000 n \n0000000375 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R /Info 3 0 R >>\nstartxref\n748\n%%EOF\n-image/png-content is application/pdf but was declared as image/png] PASSED [ 58%]
+tests/test_processor.py::test_bad_content_is_quarantined_with_reason[truncated.pdf-%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Producer (DocFlow sample generator) >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Length 322 >>\nstream\nBT /F1 12 Tf 72 720 Td 16 TL (BrightMart Supplies Pvt Ltd \(simulated\)) Tj T* (TAX INVOICE) Tj T* (Invoice No: INV-2026-0042) Tj T* (Supplier: Konkan Cotton Mills \(fictional\)) Tj T* (Line 1: 40 x Black T-Shirt \(M\) @ 249.00 = 9,960.00) Tj T* (Line 2: 10 x Cap @ 249.05 = 2,490.50) Tj T* (Total: INR 12,450.50) Tj T* ET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000015 00000 n \n0000000064 00000 n \n0000000121 00000 n \n0000000179 00000 n \n0000000305 00000 n \n0000000375 00000 n \ntrailer\n<< /Size 7 /Root 1-application/pdf-truncated] PASSED [ 59%]
+tests/test_processor.py::test_bad_content_is_quarantined_with_reason[notes.txt-caf\xe9-text/plain-not valid UTF-8] PASSED [ 60%]
+tests/test_processor.py::test_size_mismatch_is_rejected PASSED           [ 61%]
+tests/test_processor.py::test_duplicate_content_is_detected PASSED       [ 63%]
+tests/test_processor.py::test_unregistered_upload_is_quarantined PASSED  [ 64%]
+tests/test_processor.py::test_redelivered_message_is_harmless PASSED     [ 65%]
+tests/test_processor.py::test_crash_after_copy_is_finished_by_retry PASSED [ 66%]
+tests/test_processor.py::test_one_bad_message_does_not_fail_the_batch PASSED [ 67%]
+tests/test_processor.py::test_s3_test_event_is_ignored PASSED            [ 69%]
+tests/test_processor.py::test_url_encoded_keys_in_s3_events_are_decoded PASSED [ 70%]
+tests/test_processor.py::test_filenames_with_spaces_are_sanitised_before_reaching_s3 PASSED [ 71%]
+tests/test_processor.py::test_object_deleted_before_processing PASSED    [ 72%]
+tests/test_processor.py::test_notification_failure_does_not_reprocess PASSED [ 73%]
+tests/test_processor.py::test_emits_cloudwatch_emf_metrics PASSED        [ 75%]
+tests/test_validation.py::test_sanitize_filename[invoice.pdf-invoice.pdf] PASSED [ 76%]
+tests/test_validation.py::test_sanitize_filename[../../etc/passwd.txt-passwd.txt] PASSED [ 77%]
+tests/test_validation.py::test_sanitize_filename[C:\\Users\\clerk\\Desktop\\bill 7.pdf-bill_7.pdf] PASSED [ 78%]
+tests/test_validation.py::test_sanitize_filename[Rechnung M\xe4rz <final>.pdf-Rechnung_M_rz_final_.pdf] PASSED [ 79%]
+tests/test_validation.py::test_sanitize_filename[\uff49\uff4e\uff56\uff4f\uff49\uff43\uff45.pdf-invoice.pdf] PASSED [ 80%]
+tests/test_validation.py::test_sanitize_filename[...-] PASSED            [ 82%]
+tests/test_validation.py::test_sanitize_filename[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf] PASSED [ 83%]
+tests/test_validation.py::test_valid_request_is_normalised PASSED        [ 84%]
+tests/test_validation.py::test_invalid_fields[patch0-filename] PASSED    [ 85%]
+tests/test_validation.py::test_invalid_fields[patch1-filename] PASSED    [ 86%]
+tests/test_validation.py::test_invalid_fields[patch2-filename] PASSED    [ 88%]
+tests/test_validation.py::test_invalid_fields[patch3-filename] PASSED    [ 89%]
+tests/test_validation.py::test_invalid_fields[patch4-content_type] PASSED [ 90%]
+tests/test_validation.py::test_invalid_fields[patch5-content_type] PASSED [ 91%]
+tests/test_validation.py::test_invalid_fields[patch6-size_bytes] PASSED  [ 92%]
+tests/test_validation.py::test_invalid_fields[patch7-size_bytes] PASSED  [ 94%]
+tests/test_validation.py::test_invalid_fields[patch8-size_bytes] PASSED  [ 95%]
+tests/test_validation.py::test_invalid_fields[patch9-size_bytes] PASSED  [ 96%]
+tests/test_validation.py::test_invalid_fields[patch10-uploaded_by] PASSED [ 97%]
+tests/test_validation.py::test_all_errors_reported_together PASSED       [ 98%]
+tests/test_validation.py::test_body_must_be_object PASSED                [100%]
+
+---------- coverage: platform win32, python 3.13.2-final-0 -----------
+Name                               Stmts   Miss  Cover   Missing
+----------------------------------------------------------------
+src\docflow\__init__.py                0      0   100%
+src\docflow\api_handler.py           118      2    98%   111-112
+src\docflow\aws.py                    22      0   100%
+src\docflow\config.py                 45      5    89%   74-79
+src\docflow\inspector.py             117      5    96%   99, 116-117, 119, 124
+src\docflow\observability.py          26      0   100%
+src\docflow\processor_handler.py     158     17    89%   66, 113-114, 120-121, 139, 144, 146, 189-190, 198-201, 231, 254-255
+src\docflow\repository.py             67      6    91%   76, 99-102, 108
+src\docflow\validation.py             62      1    98%   46
+----------------------------------------------------------------
+TOTAL                                615     36    94%
+
+
+======================== 84 passed in 71.21s (0:01:11) ========================

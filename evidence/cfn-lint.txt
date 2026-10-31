@@ -1,0 +1,8 @@
+# cfn-lint infra/template.yaml  (2026-10-31T08:52Z)
+W3002 This code may only work with 'package' cli command
+infra\template.yaml:343:7
+
+W3002 This code may only work with 'package' cli command
+infra\template.yaml:368:7
+
+exit code: 4 (4 = warnings only; the two W3002 are the local Code: ../src paths that 'aws cloudformation package' rewrites)

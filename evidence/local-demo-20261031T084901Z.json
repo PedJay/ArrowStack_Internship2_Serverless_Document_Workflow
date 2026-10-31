@@ -1,0 +1,150 @@
+{
+  "kind": "local-demo (moto)",
+  "run_at": "2026-10-31T08:49:01+00:00",
+  "passed": 14,
+  "total": 14,
+  "processing_ms": {
+    "p50": 27.4,
+    "max": 86.8,
+    "note": "in-process against moto; not representative of AWS latency"
+  },
+  "checks": [
+    {
+      "check": "health without key -> 200",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "upload without key -> 401",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "invalid upload request -> 422 listing every bad field",
+      "result": "PASS",
+      "detail": [
+        "content_type",
+        "size_bytes",
+        "uploaded_by"
+      ]
+    },
+    {
+      "check": "invoice PDF -> fields extracted -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "invoice",
+        "extracted": {
+          "invoice_number": "INV-2026-0042",
+          "total_amount_minor": 1245050,
+          "currency": "INR"
+        },
+        "metadata": {
+          "pdf_version": "1.4",
+          "page_count": 1
+        }
+      }
+    },
+    {
+      "check": "delivery note (text) -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "delivery_note",
+        "metadata": {
+          "encoding": "utf-8",
+          "line_count": 11,
+          "word_count": 29
+        }
+      }
+    },
+    {
+      "check": "stock count (CSV, 1 ragged row) -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "stock_report",
+        "metadata": {
+          "encoding": "utf-8",
+          "line_count": 6,
+          "word_count": 11,
+          "columns": [
+            "sku",
+            "name",
+            "counted_qty",
+            "location"
+          ],
+          "row_count": 5,
+          "inconsistent_rows": 1
+        }
+      }
+    },
+    {
+      "check": "shelf photo (PNG) -> PROCESSED",
+      "result": "PASS",
+      "detail": {
+        "status": "PROCESSED",
+        "doc_class": "other",
+        "metadata": {
+          "width": 8,
+          "height": 6,
+          "bit_depth": 8
+        }
+      }
+    },
+    {
+      "check": "executable renamed to .pdf -> REJECTED",
+      "result": "PASS",
+      "detail": {
+        "status": "REJECTED",
+        "reason": "content is application/x-msdownload (Windows executable) but was declared as application/pdf"
+      }
+    },
+    {
+      "check": "truncated PDF -> REJECTED",
+      "result": "PASS",
+      "detail": {
+        "status": "REJECTED",
+        "reason": "PDF is truncated or damaged (no %%EOF marker)"
+      }
+    },
+    {
+      "check": "non-UTF-8 text -> REJECTED",
+      "result": "PASS",
+      "detail": {
+        "status": "REJECTED",
+        "reason": "text is not valid UTF-8 (byte 3). Re-save the file as UTF-8"
+      }
+    },
+    {
+      "check": "same invoice uploaded again -> DUPLICATE",
+      "result": "PASS",
+      "detail": {
+        "status": "DUPLICATE",
+        "reason": "same content as document 026dac28-f0c2-4604-bf96-9c85c1dc84a4",
+        "metadata": {
+          "pdf_version": "1.4",
+          "page_count": 1
+        }
+      }
+    },
+    {
+      "check": "list PROCESSED -> 4 documents",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "one SNS notification per document -> 8",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "incoming/ is empty; files are in processed/ and quarantine/",
+      "result": "PASS",
+      "detail": [
+        "processed",
+        "quarantine"
+      ]
+    }
+  ]
+}

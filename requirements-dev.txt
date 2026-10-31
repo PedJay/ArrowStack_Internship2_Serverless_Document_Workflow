@@ -1,0 +1,7 @@
+# Lambda runtime already ships boto3, so the deployed functions have no third-party dependencies.
+boto3==1.35.81
+pytest==8.3.4
+pytest-cov==6.0.0
+moto[s3,dynamodb,sqs,sns,secretsmanager]==5.0.24
+cfn-lint==1.57.2
+requests==2.32.3

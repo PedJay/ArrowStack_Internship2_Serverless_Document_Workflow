@@ -1,0 +1,626 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  DocFlow - Serverless Document Workflow - Project 2 (Arrowstack Cloud Internship).
+  HTTP API + Lambda issue presigned S3 uploads; S3 -> SQS -> Lambda validates, classifies and files
+  each document; metadata in DynamoDB; SNS notifications; CloudWatch metrics/alarms/dashboard;
+  versioning + PITR backups; monthly cost budget. Everything is pay-per-use and sized for the free tier.
+  Deploy with scripts/deploy.ps1 (it runs `aws cloudformation package` to upload ../src).
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: docflow
+    AllowedPattern: "^[a-z][a-z0-9-]{2,20}$"
+    Description: Prefix for every resource name (lowercase, used in the S3 bucket name)
+  AlertEmail:
+    Type: String
+    Description: Receives alarms, the budget alert and document notifications (confirm BOTH SNS emails!)
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+  EmailNotifyStatuses:
+    Type: CommaDelimitedList
+    Default: "PROCESSED,REJECTED,DUPLICATE"
+    Description: Which document outcomes are emailed (SNS filter policy). e.g. "REJECTED,DUPLICATE" for exceptions only
+  MaxUploadBytes:
+    Type: Number
+    Default: 10485760
+    MinValue: 1024
+    MaxValue: 52428800
+    Description: Largest accepted file (default 10 MiB). Enforced by the presigned POST and re-checked by the processor
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90]
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 5
+  ApiRateLimit:
+    Type: Number
+    Default: 10
+    Description: Steady-state requests/second for the HTTP API (abuse and cost guard)
+
+Resources:
+  # ------------------------------------------------------------------ secrets
+  ApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}/api-key"
+      Description: Shared API key for DocFlow clients (X-API-Key header)
+      GenerateSecretString:
+        PasswordLength: 40
+        ExcludePunctuation: true
+
+  # ------------------------------------------------------------------ storage
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: IntakeQueuePolicy # S3 tests the queue permission when the notification is created
+    Properties:
+      BucketName: !Sub "${ProjectName}-docs-${AWS::AccountId}-${AWS::Region}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: abandoned-uploads
+            Prefix: incoming/
+            Status: Enabled
+            ExpirationInDays: 1
+          - Id: quarantine-retention
+            Prefix: quarantine/
+            Status: Enabled
+            ExpirationInDays: 30
+          - Id: processed-to-infrequent-access
+            Prefix: processed/
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 90
+          - Id: old-versions-and-junk
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+            ExpiredObjectDeleteMarker: true
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Queue: !GetAtt IntakeQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  # only incoming/ - the processor writes to processed/ and quarantine/, so no loops
+                  - Name: prefix
+                    Value: incoming/
+
+  DocumentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DocumentsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DocumentsBucket.Arn
+              - !Sub "${DocumentsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-documents"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: doc_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: doc_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: by_status
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expires_at # set only on PENDING_UPLOAD records, removed when processed
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # ------------------------------------------------------------------ queueing
+  IntakeDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ProjectName}-intake-dlq"
+      MessageRetentionPeriod: 1209600 # 14 days to investigate and redrive
+      SqsManagedSseEnabled: true
+
+  IntakeQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ProjectName}-intake"
+      VisibilityTimeout: 180 # 6x the processor timeout, as AWS recommends for Lambda triggers
+      MessageRetentionPeriod: 345600 # 4 days
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IntakeDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  IntakeQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref IntakeQueue]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowOnlyOurBucket
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt IntakeQueue.Arn
+            Condition:
+              # the bucket name is known up front, which breaks the bucket <-> queue circular dependency
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-docs-${AWS::AccountId}-${AWS::Region}"
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  # ------------------------------------------------------------------ notifications
+  DocumentEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-document-events"
+      DisplayName: DocFlow
+
+  DocumentEventsEmail:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref DocumentEventsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        status: !Ref EmailNotifyStatuses
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-alarms"
+      DisplayName: DocFlow alarms
+
+  AlarmEmail:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # ------------------------------------------------------------------ logs
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-api"
+      RetentionInDays: !Ref LogRetentionDays
+
+  ProcessorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-processor"
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/${ProjectName}-http-api"
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ------------------------------------------------------------------ IAM (one role per function)
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: DocFlow API - register uploads, read records, sign S3 URLs
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: OwnLogGroupOnly
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${ApiFunctionLogGroup.Arn}"
+              - Sid: DocumentRecords
+                Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:GetItem, dynamodb:Query]
+                Resource:
+                  - !GetAtt DocumentsTable.Arn
+                  - !Sub "${DocumentsTable.Arn}/index/by_status"
+              # A presigned URL carries the signer's permissions: PUT only into incoming/, GET only from processed/
+              - Sid: SignUploadsIntoIncomingOnly
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${DocumentsBucket.Arn}/incoming/*"
+              - Sid: SignDownloadsOfProcessedOnly
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "${DocumentsBucket.Arn}/processed/*"
+              - Sid: ReadApiKey
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref ApiKeySecret
+
+  ProcessorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: DocFlow processor - consume intake queue, inspect and file documents
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: OwnLogGroupOnly
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${ProcessorFunctionLogGroup.Arn}"
+              - Sid: ConsumeIntakeQueue
+                Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes, sqs:ChangeMessageVisibility]
+                Resource: !GetAtt IntakeQueue.Arn
+              - Sid: ReadAndRemoveIncoming
+                Effect: Allow
+                Action: [s3:GetObject, s3:DeleteObject]
+                Resource: !Sub "${DocumentsBucket.Arn}/incoming/*"
+              - Sid: WriteProcessedAndQuarantine
+                Effect: Allow
+                Action: s3:PutObject
+                Resource:
+                  - !Sub "${DocumentsBucket.Arn}/processed/*"
+                  - !Sub "${DocumentsBucket.Arn}/quarantine/*"
+              # Without ListBucket, S3 answers 403 instead of 404 for a missing key, and a
+              # redelivered message for an already-moved object would look like a permissions error
+              - Sid: Distinguish404From403
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DocumentsBucket.Arn
+              - Sid: DocumentRecords
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem]
+                Resource: !GetAtt DocumentsTable.Arn
+              - Sid: Notify
+                Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref DocumentEventsTopic
+
+  # ------------------------------------------------------------------ functions
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-api"
+      Description: DocFlow HTTP API (uploads, document status, listing)
+      Runtime: python3.12
+      Architectures: [arm64] # Graviton: ~20% cheaper per GB-second
+      Handler: docflow.api_handler.handler
+      Code: ../src # replaced with an S3 location by `aws cloudformation package`
+      MemorySize: 256
+      Timeout: 10
+      Role: !GetAtt ApiFunctionRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref ApiFunctionLogGroup
+      Environment:
+        Variables:
+          APP_ENV: aws
+          DOCS_BUCKET: !Ref DocumentsBucket
+          DOCS_TABLE: !Ref DocumentsTable
+          API_KEY_SECRET_ARN: !Ref ApiKeySecret # the ARN, never the key itself
+          MAX_UPLOAD_BYTES: !Ref MaxUploadBytes
+          UPLOAD_URL_TTL_SECONDS: "300"
+          DOWNLOAD_URL_TTL_SECONDS: "300"
+          LOG_LEVEL: INFO
+
+  ProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-processor"
+      Description: DocFlow processor (validate, classify, file, notify)
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: docflow.processor_handler.handler
+      Code: ../src
+      MemorySize: 512 # holds a 10 MB file comfortably; more memory also means more CPU for hashing
+      Timeout: 30
+      Role: !GetAtt ProcessorFunctionRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref ProcessorFunctionLogGroup
+      Environment:
+        Variables:
+          APP_ENV: aws
+          DOCS_BUCKET: !Ref DocumentsBucket
+          DOCS_TABLE: !Ref DocumentsTable
+          NOTIFY_TOPIC_ARN: !Ref DocumentEventsTopic
+          MAX_UPLOAD_BYTES: !Ref MaxUploadBytes
+          METRICS_NAMESPACE: DocFlow
+          LOG_LEVEL: INFO
+
+  ProcessorQueueTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref ProcessorFunction
+      EventSourceArn: !GetAtt IntakeQueue.Arn
+      BatchSize: 5
+      MaximumBatchingWindowInSeconds: 2
+      FunctionResponseTypes: [ReportBatchItemFailures] # retry only the failed messages
+      ScalingConfig:
+        MaximumConcurrency: 2 # cost/throughput guard; the queue absorbs bursts
+
+  # ------------------------------------------------------------------ HTTP API
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${ProjectName}-http-api"
+      ProtocolType: HTTP
+      Description: DocFlow public endpoint (routing is done inside the API function)
+
+  HttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 10000
+
+  HttpApiDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: $default
+      Target: !Sub "integrations/${HttpApiIntegration}"
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ApiRateLimit
+        ThrottlingBurstLimit: 20
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latencyMs":"$context.responseLatency","integrationError":"$context.integrationErrorMessage"}'
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+
+  # ------------------------------------------------------------------ alarms
+  DeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-dlq-not-empty"
+      AlarmDescription: A document failed processing 3 times and is parked in the DLQ. See runbook "DLQ".
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt IntakeDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  QueueBacklogAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-intake-backlog"
+      AlarmDescription: Oldest unprocessed upload is over 5 minutes old (processor down or throttled)
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt IntakeQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 300
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  ProcessorErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-processor-errors"
+      AlarmDescription: The processor Lambda crashed or timed out (not the same as a rejected document)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-api-5xx"
+      AlarmDescription: The HTTP API returned server errors
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref HttpApi
+        - Name: Stage
+          Value: $default
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  RejectionSpikeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-rejection-spike"
+      AlarmDescription: 5+ documents rejected in 15 minutes - a supplier integration may be sending bad files
+      Namespace: DocFlow
+      MetricName: DocumentsRejected
+      Dimensions:
+        - Name: Service
+          Value: processor
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  # ------------------------------------------------------------------ dashboard
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${ProjectName}-overview"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {"type": "metric", "x": 0, "y": 0, "width": 12, "height": 6, "properties": {
+              "title": "Documents by outcome", "region": "${AWS::Region}", "stat": "Sum", "period": 300, "view": "timeSeries", "stacked": true,
+              "metrics": [
+                ["DocFlow", "DocumentsProcessed", "Service", "processor", {"color": "#2ca02c"}],
+                [".", "DocumentsRejected", ".", ".", {"color": "#d62728"}],
+                [".", "DocumentsDuplicate", ".", ".", {"color": "#ff7f0e"}]]}},
+            {"type": "metric", "x": 12, "y": 0, "width": 12, "height": 6, "properties": {
+              "title": "Latency (upload -> filed) and processing time", "region": "${AWS::Region}", "period": 300, "view": "timeSeries",
+              "metrics": [
+                ["DocFlow", "EndToEndLatencyMs", "Service", "processor", {"stat": "p95", "label": "end-to-end p95"}],
+                ["...", {"stat": "p50", "label": "end-to-end p50"}],
+                [".", "ProcessingDurationMs", ".", ".", {"stat": "p95", "label": "processing p95"}]]}},
+            {"type": "metric", "x": 0, "y": 6, "width": 8, "height": 6, "properties": {
+              "title": "Intake queue", "region": "${AWS::Region}", "stat": "Maximum", "period": 60, "view": "timeSeries",
+              "metrics": [
+                ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${IntakeQueue.QueueName}", {"label": "waiting"}],
+                [".", "ApproximateAgeOfOldestMessage", ".", ".", {"label": "oldest (s)", "yAxis": "right"}],
+                [".", "ApproximateNumberOfMessagesVisible", ".", "${IntakeDeadLetterQueue.QueueName}", {"label": "DLQ", "color": "#d62728"}]]}},
+            {"type": "metric", "x": 8, "y": 6, "width": 8, "height": 6, "properties": {
+              "title": "Lambda health", "region": "${AWS::Region}", "stat": "Sum", "period": 300, "view": "timeSeries",
+              "metrics": [
+                ["AWS/Lambda", "Invocations", "FunctionName", "${ProcessorFunction}", {"label": "processor invocations"}],
+                [".", "Errors", ".", ".", {"label": "processor errors", "color": "#d62728"}],
+                [".", "Throttles", ".", ".", {"label": "processor throttles"}],
+                [".", "Invocations", ".", "${ApiFunction}", {"label": "api invocations"}],
+                [".", "Errors", ".", ".", {"label": "api errors"}]]}},
+            {"type": "metric", "x": 16, "y": 6, "width": 8, "height": 6, "properties": {
+              "title": "HTTP API", "region": "${AWS::Region}", "stat": "Sum", "period": 300, "view": "timeSeries",
+              "metrics": [
+                ["AWS/ApiGateway", "Count", "ApiId", "${HttpApi}", "Stage", "$default", {"label": "requests"}],
+                [".", "4xx", ".", ".", ".", ".", {"label": "4xx"}],
+                [".", "5xx", ".", ".", ".", ".", {"label": "5xx", "color": "#d62728"}]]}},
+            {"type": "log", "x": 0, "y": 12, "width": 24, "height": 6, "properties": {
+              "title": "Latest rejections (why)", "region": "${AWS::Region}", "view": "table",
+              "query": "SOURCE '${ProcessorFunctionLogGroup}' | filter msg = 'document processed' and status != 'PROCESSED' | fields ts, doc_id, status, reason | sort ts desc | limit 20"}}
+          ]
+        }
+
+  # ------------------------------------------------------------------ cost
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  ApiUrl:
+    Value: !GetAtt HttpApi.ApiEndpoint
+  ApiKeySecretName:
+    Description: "Get the key: aws secretsmanager get-secret-value --secret-id <this> --query SecretString --output text"
+    Value: !Sub "${ProjectName}/api-key"
+  BucketName:
+    Value: !Ref DocumentsBucket
+  TableName:
+    Value: !Ref DocumentsTable
+  IntakeQueueUrl:
+    Value: !Ref IntakeQueue
+  DeadLetterQueueUrl:
+    Value: !Ref IntakeDeadLetterQueue
+  DeadLetterQueueArn:
+    Value: !GetAtt IntakeDeadLetterQueue.Arn
+  DocumentEventsTopicArn:
+    Value: !Ref DocumentEventsTopic
+  DashboardUrl:
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-overview"

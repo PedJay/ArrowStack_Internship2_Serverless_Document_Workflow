@@ -1,0 +1,10 @@
+DELIVERY NOTE DN-7781
+Supplier: Konkan Cotton Mills (fictional)
+Delivered to: BrightMart Store 3, Panaji
+Date: 2026-10-29
+
+SKU            QTY
+TSHIRT-BLK-M   40
+CAP-RED        10
+
+Received by: store desk (simulated)
